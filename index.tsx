@@ -20,7 +20,10 @@ import {
   Eye,
   ArrowRight,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  Package,
+  AlertCircle,
+  X
 } from 'lucide-react';
 
 // --- Types ---
@@ -34,6 +37,7 @@ interface Prize {
   id: string;
   name: string;
   price: number;
+  stock: number;
   image: string;
   category?: string;
 }
@@ -180,13 +184,22 @@ const App: React.FC = () => {
   const handleExchange = (prize: Prize) => {
     if (!currentUser) return;
     if (currentUser.points < prize.price) return;
+    if (prize.stock <= 0) return;
 
+    // 1. Update students and currentUser points
     const updatedStudents = students.map(s => 
       s.id === currentUser.id ? { ...s, points: s.points - prize.price } : s
     );
     setStudents(updatedStudents);
     setCurrentUser(prev => prev ? { ...prev, points: prev.points - prize.price } : null);
 
+    // 2. Update prize stock
+    const updatedPrizes = prizes.map(p => 
+      p.id === prize.id ? { ...p, stock: p.stock - 1 } : p
+    );
+    setPrizes(updatedPrizes);
+
+    // 3. Add log
     setLogs([{
       id: Date.now().toString(),
       studentName: currentUser.name,
@@ -351,13 +364,18 @@ const StoreView: React.FC<{ prizes: Prize[], userPoints: number, onExchange: (p:
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
           {prizes.map(prize => {
+            const isSoldOut = prize.stock <= 0;
             const canAfford = userPoints >= prize.price;
             const diff = prize.price - userPoints;
 
             return (
               <div 
                 key={prize.id}
-                className={`bg-white rounded-[32px] shadow-lg overflow-hidden flex flex-col transition-all group border-2 ${canAfford ? 'border-transparent hover:shadow-2xl hover:-translate-y-2' : 'border-slate-50 opacity-60 grayscale-[0.8]'}`}
+                className={`bg-white rounded-[32px] shadow-lg overflow-hidden flex flex-col transition-all group border-2 ${
+                  isSoldOut 
+                    ? 'border-slate-100 opacity-50 grayscale' 
+                    : (canAfford ? 'border-transparent hover:shadow-2xl hover:-translate-y-2' : 'border-slate-50 opacity-60 grayscale-[0.8]')
+                }`}
               >
                 <div className="aspect-[4/3] relative overflow-hidden bg-slate-100">
                   <img src={prize.image || `https://via.placeholder.com/400?text=${prize.name}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
@@ -366,7 +384,14 @@ const StoreView: React.FC<{ prizes: Prize[], userPoints: number, onExchange: (p:
                       {prize.category || '一般'}
                     </span>
                   </div>
-                  {!canAfford && (
+                  
+                  {isSoldOut ? (
+                    <div className="absolute inset-0 bg-rose-900/40 flex flex-col items-center justify-center p-6 text-center backdrop-blur-[2px]">
+                      <div className="bg-white text-rose-600 px-6 py-3 rounded-full font-black shadow-2xl transform -rotate-12 border-4 border-rose-600 text-xl tracking-wider">
+                        已售完
+                      </div>
+                    </div>
+                  ) : !canAfford && (
                     <div className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300">
                       <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mb-4 text-white">
                         <TrendingUp size={32} />
@@ -377,24 +402,34 @@ const StoreView: React.FC<{ prizes: Prize[], userPoints: number, onExchange: (p:
                     </div>
                   )}
                 </div>
-                <div className="p-8 flex flex-col flex-grow">
+
+                <div className="p-8 flex flex-col flex-grow relative">
                   <h3 className="text-2xl font-black text-slate-800 mb-3 group-hover:text-amber-600 transition-colors">{prize.name}</h3>
-                  <div className="flex items-center gap-2 mb-8">
-                     <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500">
-                        <Coins size={22} />
-                     </div>
-                     <span className="text-3xl font-black text-slate-800">{prize.price} <span className="text-lg text-slate-400 font-bold">點</span></span>
+                  
+                  <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-2">
+                       <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500">
+                          <Coins size={22} />
+                       </div>
+                       <span className="text-3xl font-black text-slate-800">{prize.price} <span className="text-lg text-slate-400 font-bold">點</span></span>
+                    </div>
+                    <div className={`px-3 py-1 rounded-lg text-xs font-black flex items-center gap-1 ${prize.stock < 3 ? 'bg-rose-50 text-rose-500' : 'bg-slate-50 text-slate-400'}`}>
+                      <Package size={14} /> 剩餘 {prize.stock}
+                    </div>
                   </div>
+
                   <button
-                    disabled={!canAfford}
+                    disabled={isSoldOut || !canAfford}
                     onClick={() => onExchange(prize)}
                     className={`mt-auto w-full py-5 rounded-[20px] text-xl font-black transition-all transform active:scale-95 flex items-center justify-center gap-3 ${
-                      canAfford 
-                        ? 'bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-600 hover:to-amber-500 text-white shadow-xl shadow-amber-200' 
-                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      isSoldOut
+                        ? 'bg-slate-300 text-white cursor-not-allowed'
+                        : canAfford 
+                          ? 'bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-600 hover:to-amber-500 text-white shadow-xl shadow-amber-200' 
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     }`}
                   >
-                    {canAfford ? <><CheckCircle2 size={24} /> 我要兌換</> : '再接再厲'}
+                    {isSoldOut ? '下次請早' : canAfford ? <><CheckCircle2 size={24} /> 我要兌換</> : '再接再厲'}
                   </button>
                 </div>
               </div>
@@ -413,17 +448,32 @@ const AdminPanel: React.FC<{
   logs: Log[], setLogs: React.Dispatch<React.SetStateAction<Log[]>>
 }> = ({ students, setStudents, prizes, setPrizes, logs, setLogs }) => {
   const [tab, setTab] = useState<'students' | 'prizes' | 'logs'>('students');
-  const [editingPrize, setEditingPrize] = useState<Partial<Prize>>({ name: '', price: 10, image: '', category: '文具' });
+  const [editingPrize, setEditingPrize] = useState<Partial<Prize>>({ name: '', price: 10, stock: 1, image: '', category: '文具' });
 
   // Prize Edit Handlers
   const handleSavePrize = () => {
-    if (!editingPrize.name || !editingPrize.price) {
-      Swal.fire('錯誤', '請填寫獎品名稱與價格', 'error');
+    if (!editingPrize.name || editingPrize.price === undefined || editingPrize.stock === undefined) {
+      Swal.fire('錯誤', '請填寫獎品名稱、價格與數量', 'error');
       return;
     }
-    setPrizes([...prizes, { id: Date.now().toString(), ...editingPrize } as Prize]);
-    setEditingPrize({ name: '', price: 10, image: '', category: '文具' });
-    Swal.fire({ icon: 'success', title: '上架成功！', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+
+    if (editingPrize.id) {
+      // Update existing
+      setPrizes(prizes.map(p => p.id === editingPrize.id ? (editingPrize as Prize) : p));
+      Swal.fire({ icon: 'success', title: '更新成功！', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+    } else {
+      // Create new
+      setPrizes([{ id: Date.now().toString(), ...editingPrize } as Prize, ...prizes]);
+      Swal.fire({ icon: 'success', title: '上架成功！', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+    }
+
+    setEditingPrize({ name: '', price: 10, stock: 1, image: '', category: '文具' });
+  };
+
+  const handleEditExisting = (prize: Prize) => {
+    setEditingPrize(prize);
+    // Scroll editor into view on mobile
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const importStudents = async () => {
@@ -503,9 +553,19 @@ const AdminPanel: React.FC<{
           <div className="animate-in slide-in-from-right-4 duration-500 flex flex-col lg:flex-row gap-10">
             {/* Prize Workbench: Editor */}
             <div className="lg:w-1/2 space-y-8">
-              <div className="flex items-center gap-3 text-amber-600 mb-6">
-                <Edit3 size={24} />
-                <h3 className="text-3xl font-black">獎品編輯器</h3>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3 text-amber-600">
+                  <Edit3 size={24} />
+                  <h3 className="text-3xl font-black">{editingPrize.id ? '修改獎品內容' : '獎品編輯器'}</h3>
+                </div>
+                {editingPrize.id && (
+                  <button 
+                    onClick={() => setEditingPrize({ name: '', price: 10, stock: 1, image: '', category: '文具' })}
+                    className="flex items-center gap-1 text-slate-400 hover:text-rose-500 font-bold transition-colors"
+                  >
+                    <X size={18} /> 取消修改
+                  </button>
+                )}
               </div>
               
               <div className="space-y-6">
@@ -533,7 +593,22 @@ const AdminPanel: React.FC<{
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-black text-slate-500 mb-2 uppercase tracking-widest">分類標籤</label>
+                    <label className="block text-sm font-black text-slate-500 mb-2 uppercase tracking-widest">庫存數量 (補貨請改這裡)</label>
+                    <div className="relative">
+                      <input 
+                        type="number"
+                        value={editingPrize.stock} 
+                        onChange={e => setEditingPrize({...editingPrize, stock: parseInt(e.target.value) || 0})}
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 outline-none font-bold"
+                      />
+                      <Package className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500" size={20} />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-black text-slate-500 mb-2 uppercase tracking-widest">分類與圖片</label>
+                  <div className="grid grid-cols-2 gap-6">
                     <select 
                       value={editingPrize.category} 
                       onChange={e => setEditingPrize({...editingPrize, category: e.target.value})}
@@ -544,34 +619,60 @@ const AdminPanel: React.FC<{
                       <option>玩具</option>
                       <option>特別任務</option>
                     </select>
+                    <input 
+                      value={editingPrize.image} 
+                      onChange={e => setEditingPrize({...editingPrize, image: e.target.value})}
+                      placeholder="圖片網址 (可選)" 
+                      className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold"
+                    />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-black text-slate-500 mb-2 uppercase tracking-widest">圖片連結</label>
-                  <input 
-                    value={editingPrize.image} 
-                    onChange={e => setEditingPrize({...editingPrize, image: e.target.value})}
-                    placeholder="貼上網址或留白使用預設圖" 
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold"
-                  />
                 </div>
 
                 <button 
                   onClick={handleSavePrize}
-                  className="w-full py-5 bg-amber-500 text-white rounded-[24px] font-black text-xl shadow-xl shadow-amber-200 hover:bg-amber-600 hover:-translate-y-1 transition-all flex items-center justify-center gap-3"
+                  className={`w-full py-5 rounded-[24px] font-black text-xl shadow-xl transition-all flex items-center justify-center gap-3 ${
+                    editingPrize.id 
+                    ? 'bg-emerald-500 text-white shadow-emerald-200 hover:bg-emerald-600' 
+                    : 'bg-amber-500 text-white shadow-amber-200 hover:bg-amber-600 hover:-translate-y-1'
+                  }`}
                 >
-                  <ArrowRight size={24} /> 上架新獎品
+                  {editingPrize.id ? <><CheckCircle2 size={24} /> 儲存修改內容</> : <><ArrowRight size={24} /> 上架新獎品</>}
                 </button>
               </div>
 
               <div className="pt-10 border-t border-slate-100">
                  <h4 className="text-xl font-black text-slate-700 mb-4">目前貨架 ({prizes.length})</h4>
-                 <div className="flex flex-wrap gap-2">
+                 <div className="grid grid-cols-1 gap-3">
                     {prizes.map(p => (
-                      <div key={p.id} className="group bg-slate-50 pl-4 pr-2 py-2 rounded-xl border border-slate-200 flex items-center gap-3 transition-all hover:bg-white hover:shadow-md">
-                        <span className="font-bold text-slate-600">{p.name}</span>
-                        <button onClick={() => setPrizes(prizes.filter(pr => pr.id !== p.id))} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all"><Trash2 size={16}/></button>
+                      <div key={p.id} className="group bg-slate-50 pl-4 pr-2 py-3 rounded-2xl border border-slate-200 flex items-center justify-between transition-all hover:bg-white hover:shadow-md">
+                        <div className="flex items-center gap-4">
+                           <div className="w-10 h-10 bg-slate-200 rounded-lg overflow-hidden">
+                              <img src={p.image || 'https://via.placeholder.com/100'} className="w-full h-full object-cover" />
+                           </div>
+                           <div>
+                              <span className="font-bold text-slate-700 block">{p.name}</span>
+                              <div className="flex items-center gap-3">
+                                 <span className="text-xs font-bold text-amber-500 flex items-center gap-1"><Coins size={12}/>{p.price} 點</span>
+                                 <span className={`text-xs font-bold flex items-center gap-1 ${p.stock <= 0 ? 'text-rose-500' : 'text-slate-400'}`}><Package size={12}/>剩餘 {p.stock}</span>
+                              </div>
+                           </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => handleEditExisting(p)} 
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-amber-500 hover:bg-amber-50 transition-all"
+                            title="修改內容 / 補貨"
+                          >
+                            <Edit3 size={18}/>
+                          </button>
+                          <button 
+                            onClick={() => setPrizes(prizes.filter(pr => pr.id !== p.id))} 
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all"
+                            title="刪除獎品"
+                          >
+                            <Trash2 size={18}/>
+                          </button>
+                        </div>
                       </div>
                     ))}
                  </div>
@@ -586,11 +687,19 @@ const AdminPanel: React.FC<{
               </div>
               <div className="bg-slate-100/50 rounded-[48px] p-12 flex items-center justify-center border-4 border-dashed border-slate-200 min-h-[500px]">
                 <div className="w-full max-w-[340px] bg-white rounded-[32px] shadow-2xl overflow-hidden animate-bounce-slow">
-                   <div className="aspect-[4/3] bg-slate-200">
+                   <div className="aspect-[4/3] bg-slate-200 relative">
                       <img src={editingPrize.image || 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=400&auto=format&fit=crop&q=60'} className="w-full h-full object-cover" />
+                      {editingPrize.stock === 0 && (
+                        <div className="absolute inset-0 bg-rose-900/40 flex items-center justify-center backdrop-blur-[1px]">
+                           <span className="bg-white text-rose-600 px-4 py-2 rounded-full font-black border-2 border-rose-600">已售完</span>
+                        </div>
+                      )}
                    </div>
                    <div className="p-8">
-                      <div className="inline-block px-3 py-1 bg-slate-100 rounded-full text-[10px] font-black uppercase text-slate-400 mb-3">{editingPrize.category}</div>
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="inline-block px-3 py-1 bg-slate-100 rounded-full text-[10px] font-black uppercase text-slate-400">{editingPrize.category}</div>
+                        <div className="text-[10px] font-black text-slate-400 flex items-center gap-1"><Package size={10}/> 剩餘 {editingPrize.stock}</div>
+                      </div>
                       <h4 className="text-2xl font-black text-slate-800 mb-2">{editingPrize.name || '這裡顯示獎品名'}</h4>
                       <div className="flex items-center gap-2 mb-6">
                          <Coins size={20} className="text-amber-500" />
@@ -600,7 +709,7 @@ const AdminPanel: React.FC<{
                    </div>
                 </div>
               </div>
-              <p className="mt-6 text-center text-slate-400 font-bold">這是學生會在商店看到的樣式</p>
+              <p className="mt-6 text-center text-slate-400 font-bold flex items-center justify-center gap-2"><AlertCircle size={16}/> 這是學生會在商店看到的樣式</p>
             </div>
           </div>
         )}
